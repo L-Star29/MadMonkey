@@ -1371,30 +1371,61 @@
 
 <script>
   // Real-world frame-rate probe — a fallback for devices the fast heuristic
-  // didn't already flag (e.g. decent CPU paired with a weak GPU). Samples
-  // actual frame timings for ~600ms; if the browser is already struggling to
-  // hit a smooth rate, downgrade to flat colors instead of guessing from specs.
+  // didn't already flag (e.g. decent CPU paired with a weak GPU).
+  //
+  // Fixed after a false positive on a real deployment (GitHub Pages): the
+  // original version sampled immediately after `load`, which can catch normal
+  // one-off page-load noise (web font swapping, initial reflow, network
+  // jitter) and mistake it for sustained poor performance — especially on a
+  // real network, where localhost/preview environments don't see that noise
+  // at all. Now it waits for things to settle, and requires the slowdown to
+  // show up TWICE (with a gap in between) before downgrading, instead of
+  // acting on a single short sample.
   (function(){
     if(document.documentElement.classList.contains('perf-lite')) return; // already downgraded, skip
-    var frames = 0, start = null;
-    var SAMPLE_MS = 600;
-    var MIN_ACCEPTABLE_FPS = 40;
 
-    function tick(ts){
-      if(start === null) start = ts;
-      frames++;
-      var elapsed = ts - start;
-      if(elapsed < SAMPLE_MS){
-        requestAnimationFrame(tick);
-      } else {
-        var fps = frames / (elapsed / 1000);
-        if(fps < MIN_ACCEPTABLE_FPS){
-          document.documentElement.classList.add('perf-lite');
+    var SAMPLE_MS = 900;
+    var MIN_ACCEPTABLE_FPS = 35;
+    var START_DELAY = 1500;  // let post-load settling finish before measuring at all
+    var CONFIRM_GAP = 1200;  // gap before the confirmation sample
+
+    function sample(callback){
+      var frames = 0, start = null;
+      function tick(ts){
+        if(start === null) start = ts;
+        frames++;
+        var elapsed = ts - start;
+        if(elapsed < SAMPLE_MS){
+          requestAnimationFrame(tick);
+        } else {
+          callback(frames / (elapsed / 1000));
         }
       }
+      requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
+
+    function runProbe(){
+      sample(function(fps1){
+        if(fps1 >= MIN_ACCEPTABLE_FPS) return; // fine — no need to double-check
+        // looked slow once — confirm with a second, separate sample before
+        // committing, to rule out a one-off hiccup rather than real strain
+        setTimeout(function(){
+          sample(function(fps2){
+            if(fps2 < MIN_ACCEPTABLE_FPS){
+              document.documentElement.classList.add('perf-lite');
+            }
+          });
+        }, CONFIRM_GAP);
+      });
+    }
+
+    if(document.readyState === 'complete'){
+      setTimeout(runProbe, START_DELAY);
+    } else {
+      window.addEventListener('load', function(){ setTimeout(runProbe, START_DELAY); });
+    }
   })();
+</script>
 </script>
 
 </body>
