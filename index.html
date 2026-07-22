@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
 <script>
+  // Fast, synchronous heuristic — runs before first paint so there's no flash of
+  // heavy effects on obviously low-power devices. A slower, more accurate
+  // frame-rate probe runs later (near the closing body tag) to catch borderline
+  // cases this heuristic can't see (e.g. weak GPU behind a decent CPU).
   (function(){
     try{
-      var cores = navigator.hardwareConcurrency || 8;
-      var mem = navigator.deviceMemory || 8;
+      var cores = navigator.hardwareConcurrency || 8; // unknown = assume capable
+      var mem = navigator.deviceMemory || 8; // Chrome/Edge only; unsupported = assume capable
       var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if(cores <= 4 || mem <= 4 || reduceMotion){
         document.documentElement.classList.add('perf-lite');
@@ -69,6 +73,7 @@
     z-index:0;
     opacity:0.6;
   }
+  /* anything inside a dark card always uses the light text set, regardless of the page's ink default */
   .card, .card *{color:var(--text);}
   .card p, .card .eyebrow{color:inherit;}
   img,svg{display:block;}
@@ -139,7 +144,7 @@
 
   /* ---------- nav ---------- */
   .nav{
-    position:sticky; top:0; z-index:50;
+    position:sticky; top:0; z-index:600;
     background:rgba(233,227,241,0.82);
     backdrop-filter:blur(14px);
     border-bottom:1px solid var(--border);
@@ -162,8 +167,55 @@
   .navcta .btn{padding:11px 20px; font-size:14.5px;}
   @media (max-width:900px){ .navlinks{display:none;} }
 
+  /* ---------- loading screen ---------- */
+  /* Plain black overlay, no duplicate text — the real hero h1 sits above it
+     (via z-index) and fades in at its actual, responsive position, so there's
+     nothing to keep in sync across screen sizes. Everything else in the hero
+     stays hidden behind the overlay until the page is ready. */
+  .load-screen{
+    position:fixed; inset:0; z-index:500;
+    background:var(--void);
+    transition:opacity .6s ease, visibility .6s ease;
+  }
+  .load-screen.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  @media (prefers-reduced-motion: reduce){
+    .load-screen{ display:none !important; }
+  }
+  .js:not(.loaded){ overflow:hidden; }
+
+  /* pure opacity fades only — no translateY/pop */
+  @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
+  @media (prefers-reduced-motion: no-preference){
+    /* h1 fades in early, while still covered by the black overlay */
+    /* Four evenly-spaced beats: "Stop scrolling" lands, then each dot arrives
+       roughly 0.8s apart, forming "..." — then a real hold, then the two extra
+       dots vanish together as "Start sparking." lands as the answer. */
+    .js .hero .h1-word{ opacity:0; animation:fadeIn .9s ease .2s forwards; }
+    .js .hero .dot-1{ opacity:0; animation:fadeIn .5s ease 1.4s forwards; }
+    .js .hero .dot-2{ opacity:0; animation:fadeIn .5s ease 2.2s forwards, collapseDot .5s ease 4.2s forwards; }
+    .js .hero .dot-3{ opacity:0; animation:fadeIn .5s ease 3s forwards, collapseDot .5s ease 4.2s forwards; }
+    @keyframes collapseDot{ from{ opacity:1; font-size:1em; } to{ opacity:0; font-size:0; } }
+    .js .hero .h1-line-2{ opacity:0; animation:fadeIn .8s ease 4.4s forwards; }
+
+    /* everything else in the hero waits for the overlay to clear */
+    .js:not(.loaded) .nav,
+    .js:not(.loaded) .hero .eyebrow,
+    .js:not(.loaded) .hero p.lede,
+    .js:not(.loaded) .hero-ctas,
+    .js:not(.loaded) .hero-note,
+    .js:not(.loaded) .spark-card,
+    .js:not(.loaded) .hero-shape-divider{ opacity:0; }
+    .loaded .nav{ animation:fadeIn .5s ease 0s both; }
+    .loaded .hero .eyebrow{ animation:fadeIn .6s ease .05s both; }
+    .loaded .hero p.lede{ animation:fadeIn .6s ease .2s both; }
+    .loaded .spark-card{ animation:fadeIn .6s ease .25s both; }
+    .loaded .hero-ctas{ animation:fadeIn .6s ease .4s both; }
+    .loaded .hero-note{ animation:fadeIn .6s ease .5s both; }
+    .loaded .hero-shape-divider{ animation:fadeIn .6s ease .1s both; }
+  }
+
   /* ---------- hero ---------- */
-  .hero{padding:96px 0 190px; overflow:hidden; background:var(--void); color:var(--text); position:relative;}
+  .hero{padding:96px 0 190px; overflow:hidden; background:var(--void); color:var(--text); position:relative; z-index:501;}
   .hero-shape-divider{
     position:absolute; left:0; right:0; bottom:0;
     height:150px;
@@ -240,6 +292,8 @@
   .sec-head p{color:var(--ink-dim); font-size:17.5px; margin-top:16px; max-width:520px;}
   #features .sec-head p{margin-left:auto; margin-right:0;}
   @media (max-width:700px){ #features .sec-head p{margin-left:0; margin-right:auto;} }
+  #club .sec-head p, #compare .sec-head p{margin-left:auto; margin-right:0;}
+  @media (max-width:700px){ #club .sec-head p, #compare .sec-head p{margin-left:0; margin-right:auto;} }
 
   section.section-pad{padding:100px 0; border-top:1px solid var(--border);}
   .hero + section.section-pad{border-top:none;}
@@ -478,8 +532,63 @@
     .feat-card{min-height:180px;}
   }
   @media (max-width:560px){ .feat-bento{grid-template-columns:1fr;} }
+
+  /* recolored drifting-orb + pulsing-spark decoration, next to the Features heading */
+  .feat-orbit{
+    display:none;
+    position:absolute;
+    width:220px; height:220px;
+    top:-30px; left:64px;
+    align-items:center; justify-content:center;
+    pointer-events:none;
+    z-index:0;
+  }
+  @media (min-width:1150px){ .feat-orbit{display:flex;} }
+  .forbit-cloud{ width:220px; }
+  .forbit-front{
+    padding-top:40px; margin-left:22px; display:inline; position:absolute; z-index:3;
+    animation:forbit-drift 8s infinite ease-in-out;
+  }
+  .forbit-back{
+    margin-top:-26px; margin-left:130px; z-index:2;
+    animation:forbit-drift 12s infinite ease-in-out;
+  }
+  .forbit-right-front{
+    width:40px; height:40px; border-radius:50% 50% 50% 0%;
+    background:var(--violet); display:inline-block; margin-left:-22px;
+  }
+  .forbit-left-front{
+    width:58px; height:58px; border-radius:50% 50% 0% 50%;
+    background:var(--violet); display:inline-block;
+  }
+  .forbit-right-back{
+    width:44px; height:44px; border-radius:50% 50% 50% 0%;
+    background:rgba(255,107,53,0.6); display:inline-block; margin-left:-18px;
+  }
+  .forbit-left-back{
+    width:26px; height:26px; border-radius:50% 50% 0% 50%;
+    background:rgba(255,107,53,0.6); display:inline-block;
+  }
+  .forbit-sun{
+    width:104px; height:104px; border-radius:50%;
+    background:radial-gradient(circle, var(--amber), var(--orange));
+    display:inline; position:absolute;
+  }
+  .forbit-sunshine{ animation:forbit-shine 2s infinite; }
+  @keyframes forbit-shine{
+    0%{ transform:scale(1); opacity:.5; }
+    100%{ transform:scale(1.4); opacity:0; }
+  }
+  @keyframes forbit-drift{
+    0%{ transform:translateX(12px); }
+    50%{ transform:translateX(0px); }
+    100%{ transform:translateX(12px); }
+  }
+  .perf-lite .feat-orbit{ display:none !important; }
+
   @media (max-width:700px){
     #features .sec-head{margin-left:0 !important; margin-right:auto !important; text-align:left !important;}
+    #club .sec-head, #compare .sec-head{margin-left:0 !important; margin-right:auto !important; text-align:left !important;}
   }
 
   /* ---------- ventures signature ---------- */
@@ -648,6 +757,46 @@
 </head>
 <body>
 
+<noscript><style>.load-screen{display:none !important;}</style></noscript>
+<div id="loadScreen" class="load-screen" aria-hidden="true"></div>
+<script>
+  document.documentElement.classList.add('js');
+  (function(){
+    var loadScreen = document.getElementById('loadScreen');
+    var MIN_HOLD = 5500;  // covers the full evenly-paced "Stop scrolling..." beat through "Start sparking." landing
+    var MAX_HOLD = 8500;  // failsafe — never block the page past this
+    var start = Date.now();
+    var revealed = false;
+
+    function reveal(){
+      if(revealed) return;
+      revealed = true;
+      document.documentElement.classList.add('loaded');
+      document.body.classList.add('loaded');
+      if(loadScreen){
+        loadScreen.classList.add('hide');
+        setTimeout(function(){
+          if(loadScreen && loadScreen.parentNode){
+            loadScreen.parentNode.removeChild(loadScreen);
+          }
+        }, 700);
+      }
+    }
+
+    function attemptReveal(){
+      var elapsed = Date.now() - start;
+      setTimeout(reveal, Math.max(0, MIN_HOLD - elapsed));
+    }
+
+    if(document.readyState === 'complete'){
+      attemptReveal();
+    } else {
+      window.addEventListener('load', attemptReveal);
+    }
+    setTimeout(reveal, MAX_HOLD); // failsafe
+  })();
+</script>
+
 <svg width="0" height="0" style="position:absolute; overflow:hidden;" aria-hidden="true">
   <filter id="advanced-texture-club">
     <feTurbulence result="noise" numOctaves="2" baseFrequency="0.35" type="fractalNoise"></feTurbulence>
@@ -682,7 +831,7 @@
   <div class="wrap">
     <div>
       <div class="eyebrow">Live on App Store &amp; Google Play</div>
-      <h1>Stop scrolling.<br>Start <span class="grad-text">sparking.</span></h1>
+      <h1><span class="h1-line h1-line-1"><span class="h1-word">Stop scrolling</span><span class="dot dot-1">.<span class="dot dot-2">.</span><span class="dot dot-3">.</span></span></span><br><span class="h1-line h1-line-2">Start <span class="grad-text">sparking.</span></span></h1>
       <p class="lede">Post your ideas. Connect with people in 24-72 hours. Build a team, and launch a venture.</p>
       <div class="hero-ctas">
         <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" class="btn btn-primary">Download on the App Store</a>
@@ -777,6 +926,18 @@
 <section class="section-pad tone-orange" id="features">
   <div class="glow" style="width:500px; height:500px; top:100px; left:50%; background:radial-gradient(circle, rgba(255,107,53,0.13), transparent 70%);"></div>
   <div class="wrap">
+    <div class="feat-orbit" aria-hidden="true">
+      <div class="forbit-cloud forbit-front">
+        <span class="forbit-left-front"></span>
+        <span class="forbit-right-front"></span>
+      </div>
+      <span class="forbit-sun forbit-sunshine"></span>
+      <span class="forbit-sun"></span>
+      <div class="forbit-cloud forbit-back">
+        <span class="forbit-left-back"></span>
+        <span class="forbit-right-back"></span>
+      </div>
+    </div>
     <div class="sec-head" style="margin-left:auto; margin-right:0; text-align:right;">
       <div class="eyebrow">Platform features</div>
       <h2>Everything you need. Nothing you don't.</h2>
@@ -913,7 +1074,7 @@
 <!-- CLUB -->
 <section class="section-pad tone-amber" id="club">
   <div class="wrap">
-    <div class="sec-head">
+    <div class="sec-head" style="margin-left:auto; margin-right:0; text-align:right;">
       <div class="eyebrow">Mad Monkey Club</div>
       <h2>Join the club as a student. Leave as a founder.</h2>
       <p>Club members get access no regular user — and no other college club — can offer.</p>
@@ -1012,9 +1173,9 @@
 </section>
 
 <!-- COMPARISON -->
-<section class="section-pad">
+<section class="section-pad" id="compare">
   <div class="wrap">
-    <div class="sec-head">
+    <div class="sec-head" style="margin-left:auto; margin-right:0; text-align:right;">
       <div class="eyebrow">Why Mad Monkey</div>
       <h2>Not another social app.</h2>
       <p>Every other platform is designed to consume your time. Mad Monkey is designed to help you create value with it.</p>
