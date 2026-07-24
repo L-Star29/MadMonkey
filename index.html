@@ -717,6 +717,10 @@
   footer{padding:56px 0; border-top:1px solid var(--border);}
   footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:24px; font-size:14px;}
   footer .flogo{font-family:var(--display); font-weight:700; color:var(--ink); font-size:18px; margin-bottom:10px;}
+  .footer-badges{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;}
+  .footer-badges a{display:block; line-height:0; transition:transform .15s ease;}
+  .footer-badges a:hover{transform:translateY(-2px);}
+  .footer-badges img{display:block; border-radius:7px; height:44px; width:auto;}
   footer a{color:var(--ink-dim);}
   footer a:hover{color:var(--ink);}
   footer .col{min-width:180px;}
@@ -819,7 +823,7 @@
       <a href="#earn">Earn</a>
     </div>
     <div class="navcta">
-      <a href="#" class="btn btn-primary">Download App</a>
+      <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" id="navDownloadBtn" class="btn btn-primary">Download App</a>
     </div>
   </div>
 </nav>
@@ -834,8 +838,8 @@
       <h1><span class="h1-line h1-line-1"><span class="h1-word">Stop scrolling</span><span class="dot dot-1">.<span class="dot dot-2">.</span><span class="dot dot-3">.</span></span></span><br><span class="h1-line h1-line-2">Start <span class="grad-text">sparking.</span></span></h1>
       <p class="lede">Post your ideas. Connect with people in 24-72 hours. Build a team, and launch a venture.</p>
       <div class="hero-ctas">
-        <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" class="btn btn-primary">Download on the App Store</a>
-        <a href="https://play.google.com/store/apps/details?id=com.agrellotech.MadMonkey" class="btn btn-outline">Get it on Google Play</a>
+        <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" class="btn btn-primary" data-store="apple">Download on the App Store</a>
+        <a href="https://play.google.com/store/apps/details?id=com.agrellotech.MadMonkey" class="btn btn-outline" data-store="google">Get it on Google Play</a>
       </div>
       <div class="hero-note">Free to join · No experience required · Built for students</div>
     </div>
@@ -1208,8 +1212,8 @@
   <div class="wrap">
     <h2>Don't search for help.<br><span class="grad-text">Spark it.</span></h2>
     <div class="final-ctas">
-      <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" class="btn btn-primary">Download on the App Store</a>
-      <a href="https://play.google.com/store/apps/details?id=com.agrellotech.MadMonkey" class="btn btn-outline">Get it on Google Play</a>
+      <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" class="btn btn-primary" data-store="apple">Download on the App Store</a>
+      <a href="https://play.google.com/store/apps/details?id=com.agrellotech.MadMonkey" class="btn btn-outline" data-store="google">Get it on Google Play</a>
     </div>
   </div>
 </section>
@@ -1219,6 +1223,14 @@
     <div class="col" style="min-width:220px;">
       <div class="flogo">MAD MONKEY</div>
       <p style="max-width:220px; font-size:14px; color:var(--ink-dim);">Mad Monkey AI Inc.<br>Glen Allen, Virginia, USA</p>
+      <div class="footer-badges">
+        <a href="https://apps.apple.com/us/app/mad-monkey-ai/id6737187047" aria-label="Download on the App Store">
+          <img src="appstore_badge.png" alt="Download on the App Store" width="135" height="44" loading="lazy" decoding="async">
+        </a>
+        <a href="https://play.google.com/store/apps/details?id=com.agrellotech.MadMonkey" aria-label="Get it on Google Play">
+          <img src="googleplay_badge.png" alt="Get it on Google Play" width="135" height="44" loading="lazy" decoding="async">
+        </a>
+      </div>
     </div>
     <div class="col">
       <h4>Product</h4>
@@ -1426,6 +1438,54 @@
     }
   })();
 </script>
+</script>
+
+<script>
+  // Region-aware store priority: App Store stays primary for the US (the current
+  // default markup); everywhere else — India explicitly, and any other country
+  // as a sensible default since Google Play dominates most non-US markets —
+  // Google Play becomes the primary button and the nav link's destination.
+  //
+  // Note: this calls a third-party IP-geolocation API (ipapi.co) to determine
+  // the visitor's country client-side, since this is a static site with no
+  // backend to do that lookup server-side. If the lookup fails for any reason
+  // (offline, ad-blocker, rate limit, API change), it safely falls back to the
+  // US-style default rather than breaking anything.
+  (function(){
+    var APPLE_URL = 'https://apps.apple.com/us/app/mad-monkey-ai/id6737187047';
+    var GOOGLE_URL = 'https://play.google.com/store/apps/details?id=com.agrellotech.MadMonkey';
+
+    function makeGooglePrimary(){
+      document.querySelectorAll('[data-store="apple"]').forEach(function(el){
+        el.classList.remove('btn-primary');
+        el.classList.add('btn-outline');
+      });
+      document.querySelectorAll('[data-store="google"]').forEach(function(el){
+        el.classList.remove('btn-outline');
+        el.classList.add('btn-primary');
+        // move it before its App Store sibling so the primary option reads first
+        var appleSibling = el.parentNode.querySelector('[data-store="apple"]');
+        if(appleSibling){ el.parentNode.insertBefore(el, appleSibling); }
+      });
+      var navBtn = document.getElementById('navDownloadBtn');
+      if(navBtn) navBtn.href = GOOGLE_URL;
+    }
+
+    // safe default while the (best-effort) lookup runs, and the permanent
+    // fallback if it fails
+    var navBtn = document.getElementById('navDownloadBtn');
+    if(navBtn) navBtn.href = APPLE_URL;
+
+    fetch('https://ipapi.co/json/', { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if(!data || !data.country_code) return;
+        if(data.country_code.toUpperCase() !== 'US'){
+          makeGooglePrimary();
+        }
+      })
+      .catch(function(){ /* lookup failed — keep the US-style default */ });
+  })();
 </script>
 
 </body>
